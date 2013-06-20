@@ -4,7 +4,7 @@ package processreadcounts;
 import java.io.IOException;
 import java.util.Map;
 import java.util.TreeMap;
-import processtmap.GeneNameConverter;
+import misc.GeneNameConverter;
 import umcg.genetica.io.text.TextFile;
 
 /**
