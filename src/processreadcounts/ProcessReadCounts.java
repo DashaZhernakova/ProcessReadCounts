@@ -10,7 +10,7 @@ import java.io.IOException;
 public class ProcessReadCounts {
 
     /**
-     * @param args the command line arguments
+     *
      */
     
     public static void usage(){
@@ -24,7 +24,8 @@ public class ProcessReadCounts {
                 + "--alnFnamePattern (Filename of the file with mapped reads)\n\t\t"
                 + "--normalize (true if you want the expression values normalized by the total number of mapped reads per sample)\n\t\t"
                 + "--convertGeneName (skip it)\n\t\t"
-                + "--normalizeByGeneLength (true if you want the expression values normalized by the gene length)");
+                + "--normalizeByGeneLength (true if you want the expression values normalized by the gene length)\n\t\t"
+                + "--fileList (File with file paths to process)");
     }
     public static void main(String[] args) throws IOException {
         
@@ -51,7 +52,7 @@ public class ProcessReadCounts {
         if (mode == null) 
 	    System.out.println("ERROR: Please supply --mode");
         else if (mode.equals("makeExpressionTable")){
-            String annot = null, pattern = null, dir = null, outFile = null, alnPattern = null, convert = null;
+            String annot = null, pattern = null, dir = null, outFile = null, alnPattern = null, convert = null, fileList = null;
             boolean normalize = true, normLen = false, rpkm = false;
             //System.out.println("mode=make_expression_table");
             for (int j = i; j < args.length; j++) {
@@ -77,6 +78,9 @@ public class ProcessReadCounts {
                 if (arg.equals("--alnFnamePattern")) {
                     alnPattern = val;
                 }
+                if (arg.equals("--fileList")) {
+                    fileList = val;
+                }
                 if (arg.equals("--normalize")) {
                     normalize = Boolean.valueOf(val);
                 }
@@ -99,27 +103,32 @@ public class ProcessReadCounts {
                 ProcessTranscriptCountsRPKM pr = new ProcessTranscriptCountsRPKM(dir, pattern, annot, outFile, alnPattern);
                 pr.readCounts();
             }else{
-                if (alnPattern == null){
-                    if (convert == null){
-                        p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, normalize);
-                        System.out.println("alnPattern == null, convert == null");
+                if (fileList == null){
+                    if (alnPattern == null){
+                        if (convert == null){
+                            p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, normalize);
+                            System.out.println("alnPattern == null, convert == null");
+                        }
+                        else{
+                            p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, normalize, convert);
+                            System.out.println("alnPattern == null");
+                        }
                     }
                     else{
-                        p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, normalize, convert);
-                        System.out.println("alnPattern == null");
+                        if (convert == null){
+                            System.out.println("convert == null");
+                            p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, alnPattern, normalize, normLen);
+                        }
+                        else{
+                            p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, alnPattern, normalize, convert);
+                            System.out.println("nothing null");
+                        }
                     }
+                    p.run();
                 }
                 else{
-                    if (convert == null){
-                        System.out.println("convert == null");
-                        p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, alnPattern, normalize, normLen);
-                    }
-                    else{
-                        p = new ProcessTranscriptCounts(dir, pattern, annot, outFile, alnPattern, normalize, convert);
-                        System.out.println("nothing null");
-                    }
+                    p = new ProcessTranscriptCounts(fileList, annot, outFile);
                 }
-                p.readCounts();
             }
         }
         

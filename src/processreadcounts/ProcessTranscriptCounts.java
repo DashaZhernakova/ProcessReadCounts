@@ -7,6 +7,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.logging.Level;
@@ -25,26 +26,33 @@ import umcg.genetica.io.text.TextFile;
  */
 public class ProcessTranscriptCounts {
     
-    String annotationFname;
-    String dirName;
-    String outFile;
-    String fnamePattern;
-    String alnFnamePattern;
+    String annotationFname = null;
+    String dirName = null;
+    String fnamePattern = null;
+    String outFile = null;
+
+    String fileList = null;
+
+    String alnFnamePattern = null;
+    boolean normalize = false;
+
+    boolean normalizeByLength = false;
+    String convertGeneName = null;
+
+    float[][] table;
     ArrayList<String> allTranscr;
     String[] sampleNames;
     float[] readsPerSample;
     boolean[] featureExpressed;
     int trSize;
     int samplesSize;
-    boolean normalize;
-    boolean normalizeByLength;
-    String convertGeneName;
     HashMap<String,Integer> trLengths;
+
     ProcessTranscriptCounts(String dir, String fname, String annot, String output, boolean norm, String conv){
         annotationFname=annot;
-	fnamePattern = fname;
+	    fnamePattern = fname;
         dirName=dir;
-	outFile=output;
+	    outFile=output;
         allTranscr = new ArrayList<String>();
         normalize = norm;
         convertGeneName = conv;
@@ -52,9 +60,9 @@ public class ProcessTranscriptCounts {
     
     ProcessTranscriptCounts(String dir, String fname, String annot, String output, String aln, boolean norm, String conv){
         annotationFname=annot;
-	fnamePattern = fname;
+	    fnamePattern = fname;
         dirName=dir;
-	outFile=output;
+	    outFile=output;
         allTranscr = new ArrayList<String>();
         alnFnamePattern = aln;
         normalize = norm;
@@ -62,19 +70,26 @@ public class ProcessTranscriptCounts {
     }
     ProcessTranscriptCounts(String dir, String fname, String annot, String output, boolean norm){
         annotationFname=annot;
-	fnamePattern = fname;
+	    fnamePattern = fname;
         dirName=dir;
-	outFile=output;
+	    outFile=output;
         allTranscr = new ArrayList<String>();
         normalize = norm;
         convertGeneName = null;
     }
+
+    ProcessTranscriptCounts(String fileListPath, String annot, String output){
+        annotationFname=annot;
+        outFile=output;
+        fileList = fileListPath;
+        allTranscr = new ArrayList<String>();
+    }
     
     ProcessTranscriptCounts(String dir, String fname, String annot, String output, String aln, boolean norm){
         annotationFname=annot;
-	fnamePattern = fname;
+	    fnamePattern = fname;
         dirName=dir;
-	outFile=output;
+	    outFile=output;
         allTranscr = new ArrayList<String>();
         alnFnamePattern = aln;
         normalize = norm;
@@ -83,9 +98,9 @@ public class ProcessTranscriptCounts {
 
     ProcessTranscriptCounts(String dir, String fname, String annot, String output, String aln, boolean norm, boolean lenNorm){
         annotationFname=annot;
-	fnamePattern = fname;
+	    fnamePattern = fname;
         dirName=dir;
-	outFile=output;
+	    outFile=output;
         allTranscr = new ArrayList<String>();
         alnFnamePattern = aln;
         normalize = norm;
@@ -116,7 +131,6 @@ public class ProcessTranscriptCounts {
         else{
             trLengths = new HashMap<String, Integer>();
             while ((line = in.readLine()) != null){
-                //System.out.println(line);
                 spl = line.split("\t");
                 allTranscr.add(spl[1]);
                 len = Integer.parseInt(spl[5]) - Integer.parseInt(spl[4]);
@@ -126,7 +140,6 @@ public class ProcessTranscriptCounts {
         }
         in.close();
         System.out.println(cnt + " transcripts / genes read.\n");
-        //return allTranscr;
     }
     
     /**
@@ -134,19 +147,28 @@ public class ProcessTranscriptCounts {
      * @return 
      */
     public ArrayList<String> getFileNames(){
-	System.out.println("Getting all files with reads per transcripts counts. Files names finish with " + fnamePattern);
-        ArrayList<String> file_names = new ArrayList<String>();
+	    System.out.println("Getting all files with reads per transcripts counts. Files names finish with " + fnamePattern);
+        ArrayList<String> fileNames = new ArrayList<String>();
         File dir = new File(dirName);
         for (File ch : dir.listFiles()) {
             if (ch.isDirectory())
                 for (File child : ch.listFiles()){
                    if (child.getName().equals(fnamePattern)){
-                       file_names.add(child.getPath());
+                       fileNames.add(child.getPath());
+                       ch.getName();
                   }
             }
         }
-        System.out.println(file_names.size() + " files will be processed.\n");
-         return file_names;
+        int numSamples = fileNames.size();
+        sampleNames = new String[numSamples];
+        System.out.println(numSamples + " files will be processed.\n");
+
+        for (int i = 0; i < numSamples; i++){
+            String[] splName = fileNames.get(i).split("/");
+            String sampleId = splName[splName.length - 2];
+            sampleNames[i] = sampleId;
+        }
+        return fileNames;
     }
     
     private boolean avgHigherThanThreshold(float thres, float[] values){
@@ -159,7 +181,7 @@ public class ProcessTranscriptCounts {
         return false;
     }
     
-    public void printTable(float[][] table) throws IOException{
+    public void printTable() throws IOException{
 	System.out.println("printing the resulting expression table to " + outFile);
         System.out.println("Normalize=" + normalize);
 	//BufferedWriter outReads = new BufferedWriter (new FileWriter(outFile));
@@ -196,7 +218,7 @@ public class ProcessTranscriptCounts {
         outReads.close();
     }
     
-    public void printTableNormByLength(float[][] table) throws IOException{
+    public void printTableNormByLength() throws IOException{
 	System.out.println("printing the resulting expression table to " + outFile);
         System.out.println("Normalize=" + normalize);
 	//BufferedWriter outReads = new BufferedWriter (new FileWriter(outFile));
@@ -232,15 +254,7 @@ public class ProcessTranscriptCounts {
         outReads.close();
     }
     
-    public String[][] fill(String[][] table){
-        for (int i = 0; i < table.length; i++)
-            for (int j = 0; j < table[i].length; j++)
-                if ((i == 0) || (j ==0))
-                    table[i][j] = "";
-                else
-                    table[i][j] = "0.0";
-        return table;
-    }
+
     
     
     /**
@@ -287,10 +301,10 @@ public class ProcessTranscriptCounts {
         return numReads;
     }
     
-    private String[] readExpressionLine(String line){
+    private String[] readExpressionLine(String fName, String line){
         String[] spl;
         String count;
-        if (fnamePattern.endsWith(".gtf")){
+        if (fName.replace(".gz", "").endsWith(".gtf")){
             spl = line.split("\"");
             count = spl[6].split(" ")[2].replace(";", "");
             return new String[]{spl[1], count};
@@ -298,34 +312,57 @@ public class ProcessTranscriptCounts {
         return line.split("\t");
         
     }
+
+    public void run() throws IOException {
+        System.out.println("started processing " + dirName);
+
+        //all transcripts from ensembl, sorted
+        getAllTranscripts();
+        Collections.sort(allTranscr);
+        trSize = allTranscr.size(); //number of transcripts
+
+        //all files to use
+        ArrayList<String> fNames = null;
+        if (fileList == null){
+            fNames = getFileNames();//get file names and sample names
+        }
+        else{
+            TextFile flist = new TextFile(fileList, false);
+            
+            fNames = new ArrayList<String>(Arrays.asList(flist.readAsArray(1, TextFile.tab)));
+            sampleNames = new String[fNames.size()];
+            flist.close();
+            flist = new TextFile(fileList, false);
+            sampleNames = flist.readAsArray(0, TextFile.tab);
+
+            flist.close();
+        }
+        samplesSize = fNames.size(); //number of samples
+
+        makeTable(fNames);
+
+        //print the result
+        if (! normalizeByLength)
+            printTable();
+        else
+            printTableNormByLength();
+    }
     /**
      * writes feature counts into expression table. New version - with float[][]
      * @throws IOException 
      */
-    public void readCounts() throws IOException{
-        System.out.println("started processing " + dirName);
-	TextFile in = null;
-	String line = "";
+    public void makeTable(ArrayList<String> fNames) throws IOException{
+
+	    TextFile in = null;
+	    String line = "";
         String[] splLine;
         
         int index = 0;
-        
-        //all transcripts from ensembl, sorted
-        //allTranscr = getAllTranscripts();
-        getAllTranscripts();
-        Collections.sort(allTranscr);
-        
-        //all files to use
-        ArrayList<String> fNames = getFileNames();
-        
-        trSize = allTranscr.size(); //number of transcripts
-        samplesSize = fNames.size(); //number of samples
         //table with only counts
-        float[][] table = new float[trSize][samplesSize];
+        table = new float[trSize][samplesSize];
         readsPerSample = new float[samplesSize];
-        sampleNames = new String[samplesSize];
         featureExpressed = new boolean[trSize];
-        //table=fill(table);//fill with empty strings
+
         GeneNameConverter converter = null; 
         if (convertGeneName != null)
            converter = new GeneNameConverter(convertGeneName);
@@ -336,21 +373,16 @@ public class ProcessTranscriptCounts {
         for (String fName : fNames){
             int rCount=0;
             in = new TextFile(fName, false);
-            //getting sample name from the file name
+
             System.out.println("\nProcessing file: " + fName);
-            String sampleId="";
-            String[] splName = fName.split("/");
-            sampleId = splName[splName.length - 2];
-            
-            sampleNames[curId] = sampleId;
-            
+
             //get number of mapped reads from filtered sam file
             if (normalize)
                 readsPerSample[curId] = getNumMappedReads(fName);
-            //in.readLine();
+
             while ((line = in.readLine()) != null){
                 //read the expression from simple txt or from gtf   
-                splLine = readExpressionLine(line);
+                splLine = readExpressionLine(fName, line);
                 float count = Float.valueOf(splLine[1]);
                 
                 //skip not expressed transcripts
@@ -380,11 +412,7 @@ public class ProcessTranscriptCounts {
             in.close();
             
         }
-        //print the result
-        if (! normalizeByLength)
-            printTable(table);
-        else
-            printTableNormByLength(table);
+
     }
     
     
@@ -392,15 +420,18 @@ public class ProcessTranscriptCounts {
         ProcessTranscriptCounts p;
         //if (args.length > 3){
             //p = new ProcessTranscriptCounts(args[0], args[1], args[2], args[3]);
-        p = new ProcessTranscriptCounts("/Users/dashazhernakova/Documents/UMCG/data/geuvadis/mappedData_masked/", 
-                "reads_unique_hits.sorted.flux.gtf", 
-                "/Users/dashazhernakova/Documents/UMCG/hg19/annotations/annotation_transcr_hg19_geneIds.txt", 
+        /*p = new ProcessTranscriptCounts("/Users/dashazhernakova/Documents/UMCG/data/geuvadis/mappedData_masked/",
+                "reads_unique_hits.sorted.flux.gtf.gz", 
+                "/Users/dashazhernakova/Documents/UMCG/hg19/annotations/annotation_transcr_hg19_geneIds.txt.gz", 
                 "/Users/dashazhernakova/Documents/UMCG/data/geuvadis/expression_table/test.txt",
                 "reads_unique_hits.sorted.idxstats",
-                true);
+                false);
+          */      
         //p = new ProcessTranscriptCounts("/Users/dashazhernakova/Documents/UMCG/pickrell_data/tophat_out/", "covBed_exon_counts_out.txt", "/Users/dashazhernakova/Documents/UMCG/hg19/annotation_transcr_hg19.txt", "/Users/dashazhernakova/Documents/UMCG/GeneticalGenomicsDatasets/tmp_expression.txt");
-                
-        p.readCounts();
+        p = new ProcessTranscriptCounts("/Users/dashazhernakova/Documents/UMCG/GeneticalGenomicsDatasets/tmp.txt",
+                "/Users/dashazhernakova/Documents/UMCG/hg19/annotations/annotation_transcr_hg19_geneIds.txt.gz",
+                "/Users/dashazhernakova/Documents/UMCG/data/geuvadis/expression_table/test2.txt");
+        p.run();
         //p.readCounts();
        // }
         //else
